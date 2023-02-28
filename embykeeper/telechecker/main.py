@@ -4,14 +4,27 @@ from threading import Event
 import click
 from appdirs import user_cache_dir
 from loguru import logger
-from telegram.client import AuthorizationState, Telegram
+from teleclient.client import AuthorizationState, Telegram
 
 from . import *
 
 CHECKINERS = (JMSCheckin, TerminusCheckin, JMSIPTVCheckin, LJYYCheckin, PeachCheckin)
 
 
-def login(config):
+def _default_login_callback(config, tg, account):
+    state = tg.login(blocking=False)
+    while not state == AuthorizationState.READY:
+        if config.get("quiet", False) == True:
+            logger.error(f'账号 "{account["phone"]}" 需要额外的信息以登录, 但由于quiet模式而跳过.')
+            continue
+        if state == AuthorizationState.WAIT_CODE:
+            tg.send_code(click.prompt(f'请在客户端接收验证码 ({account["phone"]})', type=str))
+        if state == AuthorizationState.WAIT_PASSWORD:
+            tg.send_password(click.prompt(f'请输入密码 ({account["phone"]})', type=str, hide_input=True))
+        state = tg.login(blocking=False)
+
+
+def login(config, login_callback=_default_login_callback):
     proxy = config.get("proxy", None)
     if proxy:
         proxy_host = proxy.get("host", "127.0.0.1")
@@ -27,6 +40,7 @@ def login(config):
         proxy_host = proxy_port = proxy_type = None
     for a in config.get("telegram", ()):
         logger.info(f'登录 Telegram: {a["phone"]}.')
+        up = a.get("useproxy", True)
         tg = Telegram(
             tdlib_verbosity=1,
             api_id=a["api_id"],
@@ -34,22 +48,11 @@ def login(config):
             phone=a["phone"],
             database_encryption_key="passw0rd!",
             files_directory=user_cache_dir("telegram"),
-            proxy_server=proxy_host,
-            proxy_port=proxy_port,
-            proxy_type=proxy_type,
+            proxy_server=proxy_host if up else None,
+            proxy_port=proxy_port if up else None,
+            proxy_type=proxy_type if up else None,
         )
-        state = tg.login(blocking=False)
-        while not state == AuthorizationState.READY:
-            if config.get("quiet", False) == True:
-                logger.error(f'账号 "{a["phone"]}" 需要额外的信息以登录, 但由于quiet模式而跳过.')
-                continue
-            if state == AuthorizationState.WAIT_CODE:
-                tg.send_code(click.prompt(f'请在客户端接收验证码 ({a["phone"]})', type=str))
-            if state == AuthorizationState.WAIT_PASSWORD:
-                tg.send_password(
-                    click.prompt(f'请输入密码 ({a["phone"]})', type=str, hide_input=True)
-                )
-            state = tg.login(blocking=False)
+        login_callback(config, tg, a)
         me = tg.get_me()
         me.wait()
         if me.error:
@@ -81,9 +84,7 @@ def _parse_update(tg, update, cache={}):
                 if sender.error:
                     sender_name = f"<Unknown User {sender_id}>"
                 else:
-                    sender_name = (
-                        f"{sender.update['first_name']} {sender.update['last_name']}"
-                    )
+                    sender_name = f"{sender.update['first_name']} {sender.update['last_name']}"
                 cache[sender_id] = sender_name
         return "{} > {}: {} (chatid = {}, userid = {}) ".format(
             tg.username,
@@ -94,9 +95,9 @@ def _parse_update(tg, update, cache={}):
         )
 
 
-def main(config, follow=False):
+def main(config, follow=False, **kw):
     if not follow:
-        for tg in login(config):
+        for tg in login(config, **kw):
             checkiners = [cls(tg, config.get("retries", 10)) for cls in CHECKINERS]
             for c in checkiners:
                 logger.info(c.msg("开始执行签到."))
@@ -112,7 +113,7 @@ def main(config, follow=False):
                         logger.error(c.msg("无法在时限内完成签到."))
             logger.info("运行完成.")
     else:
-        for tg in login(config):
+        for tg in login(config, **kw):
             logger.info(f"等待新消息更新以获取 ChatID.")
             cache = {}
 

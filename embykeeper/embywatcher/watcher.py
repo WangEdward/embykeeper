@@ -16,9 +16,7 @@ class EmbyWatcher:
         self.emby = emby
 
     def get_oldest(self, n=10):
-        yield from self.emby.get_items(
-            ["Movie", "Episode"], limit=n, sort="DateCreated"
-        )
+        yield from self.emby.get_items(["Movie", "Episode"], limit=n, sort="DateCreated")
 
     def set_played(self, obj: EmbyObject):
         c: Connector = obj.connector
@@ -26,9 +24,7 @@ class EmbyWatcher:
 
     def hide_from_resume(self, obj: EmbyObject):
         c: Connector = obj.connector
-        return is_ok(
-            c.post(f"/Users/{{UserId}}/Items/{obj.id}/HideFromResume", hide=True)
-        )
+        return is_ok(c.post(f"/Users/{{UserId}}/Items/{obj.id}/HideFromResume", hide=True))
 
     def get_last_played(self, obj: EmbyObject):
         last_played = obj.object_dict.get("UserData", {}).get("LastPlayedDate", None)

@@ -5,7 +5,7 @@ from threading import Event
 
 import ddddocr
 from loguru import logger
-from telegram.client import Telegram
+from teleclient.client import Telegram
 from thefuzz import fuzz
 
 ocr = ddddocr.DdddOcr(beta=True, show_ad=False)
@@ -36,9 +36,7 @@ class BotCheckin:
     def init_bot(self):
         if not self.has_chat():
             logger.info("账号中不存在与机器人的聊天, 正在初始化.")
-            ret = self.client.call_method(
-                "createPrivateChat", params={"user_id": self.BOT_USER_ID}
-            )
+            ret = self.client.call_method("createPrivateChat", params={"user_id": self.BOT_USER_ID})
             ret.wait()
             if ret.error:
                 return False
@@ -87,9 +85,7 @@ class BotCheckin:
         elif any(s in text for s in ("成功", "通过", "完成")):
             matches = re.search(r"(\d+)[^\d]*(\d+)", text)
             if matches:
-                logger.warning(
-                    self.msg(f"签到成功: + {matches.group(1)} 分 -> {matches.group(2)} 分.")
-                )
+                logger.warning(self.msg(f"签到成功: + {matches.group(1)} 分 -> {matches.group(2)} 分."))
             self.finished.set()
         elif any(s in text for s in ("只能", "已经", "下次", "过了")):
             logger.warning(self.msg(f"今日已经签到过了."))
@@ -151,9 +147,7 @@ class BotCheckin:
     def _download_photo(self, photo):
         file_id = photo["id"]
         self._downloaded_file_ids.append(file_id)
-        ret = self.client.call_method(
-            method_name="downloadFile", params={"file_id": file_id, "priority": 1}
-        )
+        ret = self.client.call_method(method_name="downloadFile", params={"file_id": file_id, "priority": 1})
         ret.wait()
         if ret.error:
             logger.error(self.msg(f"读取验证码图片异常错误."))
@@ -167,9 +161,7 @@ class BotCheckin:
         messages = []
         message_id = 0
         while True:
-            ret = self.client.get_chat_history(
-                self.BOT_USER_ID, from_message_id=message_id
-            )
+            ret = self.client.get_chat_history(self.BOT_USER_ID, from_message_id=message_id)
             ret.wait()
             updates = ret.update["messages"]
             if not len(updates):

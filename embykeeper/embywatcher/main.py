@@ -13,22 +13,25 @@ def _gen_random_device_id():
 
 
 def main(config):
-    proxy = config.get("proxy", {})
+    proxy = config.get("proxy", None)
     if proxy:
-        proxy = {
-            "proxy_type": proxy.get("type", "socks5"),
-            "proxy_host": proxy.get("host", "127.0.0.1"),
-            "proxy_port": proxy.get("port", "1080"),
-        }
+        proxy_type = proxy.get("type", "socks5")
+        proxy_host = proxy.get("host", "127.0.0.1")
+        proxy_port = proxy.get("port", "1080")
+    else:
+        proxy_type = proxy_host = proxy_port = None
     for a in config.get("emby", ()):
         logger.info(f'登录到Emby: {a["url"]}')
+        up = a.get("useproxy", True)
         emby = Emby(
             url=a["url"],
             username=a["username"],
             password=a["password"],
             device_id=_gen_random_device_id(),
             jellyfin=a.get("jellyfin", False),
-            **proxy,
+            proxy_type=proxy_type if up else None,
+            proxy_host=proxy_host if up else None,
+            proxy_port=proxy_port if up else None,
         )
         info = emby.info()
         if info:
@@ -53,9 +56,7 @@ def main(config):
                     if not last_played:
                         continue
                     last_played = last_played.strftime("%Y-%m-%d %H:%M:%S")
-                    logger.info(
-                        msg(f"成功播放视频, 当前该视频播放{obj.play_count}次, 上次播放于 {last_played}.")
-                    )
+                    logger.info(msg(f"成功播放视频, 当前该视频播放{obj.play_count}次, 上次播放于 {last_played}."))
                     break
             except KeyboardInterrupt as e:
                 raise e from None
